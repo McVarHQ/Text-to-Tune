@@ -18,3 +18,10 @@ Thumbs.db
 
 # Secrets (if you ever add any, e.g. API keys, credentials)
 .env
+
+# Too Large
+lmd-full_and_reddit_MIDI_dataset/
+lmd-full_MIDI_dataset/
+Dockerfile
+docker-compose.yml
+melodies_experiments.zip

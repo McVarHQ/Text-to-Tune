@@ -2,7 +2,6 @@ import numpy as np
 from gensim.models import Word2Vec
 import tensorflow as tf
 from tensorflow.python.ops import array_ops
-
 from shutil import copyfile
 import utils
 import midi_statistics
