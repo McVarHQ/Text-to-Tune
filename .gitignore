@@ -25,3 +25,4 @@ lmd-full_MIDI_dataset/
 Dockerfile
 docker-compose.yml
 melodies_experiments.zip
+GUI-Interface/soundfont.sf2

@@ -8,3 +8,17 @@ mido==1.2.10
 numpy==1.16.4
 scipy==1.3.1
 pyphen==0.11.0
+
+# --- GUI stack (all pinned to the last versions that still support Py3.6) ---
+# Flask + its dependency chain. Newer Werkzeug/Jinja2/etc. dropped Py3.6, and
+# Flask's own pins have no upper bound, so we pin the whole chain explicitly to
+# stop pip resolving to versions that crash on this container's Python 3.6.
+Flask==2.0.3
+Werkzeug==2.0.3
+Jinja2==3.0.3
+itsdangerous==2.0.1
+click==8.0.4
+MarkupSafe==2.0.1
+
+music21==6.7.1
+pyFluidSynth==1.3.3

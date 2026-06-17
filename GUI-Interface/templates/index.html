@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Text-to-Tune</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Outfit:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<!-- ===== Background: infinite flipping carousel of bg.jpg ===== -->
+<div class="bg-carousel" id="bgCarousel" aria-hidden="true">
+  <div class="bg-slide"></div>
+  <div class="bg-slide flipped"></div>
+  <div class="bg-slide"></div>
+  <div class="bg-slide flipped"></div>
+</div>
+<div class="bg-veil" aria-hidden="true"></div>
+
+<main class="shell">
+
+  <!-- ===== Title ===== -->
+  <header class="masthead">
+    <h1 class="title">Text<span class="dash">&ndash;</span>to<span class="dash">&ndash;</span>Tune</h1>
+    <p class="byline">A demo by Varun Anbalagan</p>
+  </header>
+
+  <!-- ===== Tab bar ===== -->
+  <nav class="tabbar" role="tablist">
+    <button class="tab is-active" data-tab="compose" role="tab">Compose</button>
+    <button class="tab" data-tab="voice" role="tab">Voice</button>
+    <button class="tab" data-tab="mix" role="tab">Mix</button>
+  </nav>
+
+  <!-- ============ TAB: COMPOSE ============ -->
+  <section class="panel is-active" data-panel="compose">
+    <p class="lead">Type your lyrics, one phrase per line. Every line becomes its own melodic
+      phrase, and each phrase leans on the one before it so the song holds together.</p>
+
+    <div class="editor">
+      <div class="gutter" id="gutter"><span>1</span></div>
+      <textarea id="lyrics" class="lyrics-area" spellcheck="false"
+        placeholder="Listen to the rhythm of the falling rain&#10;Telling me just what a fool I've been"></textarea>
+    </div>
+
+    <div class="compose-controls">
+      <label class="inst-pick">
+        <span>Voice it as</span>
+        <select id="instrument">
+          {% for inst in instruments %}
+          <option value="{{ inst }}">{{ inst|capitalize }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <button id="generateBtn" class="btn-primary">Compose melody</button>
+    </div>
+
+    <p class="hint" id="composeHint"></p>
+
+    <!-- Staff loading + result region -->
+    <div class="stage" id="stage" hidden>
+      <div class="stage-label" id="stageLabel">Composing&hellip;</div>
+      <div class="staves" id="staves"></div>
+    </div>
+
+    <!-- Player + downloads, shown after generation -->
+    <div class="results" id="results" hidden>
+      <div class="player-row">
+        <button id="renderBtn" class="btn-ghost">Render audio</button>
+        <audio id="player" controls preload="none"></audio>
+      </div>
+      <div class="dl-row">
+        <a class="dl" id="dlMidi" href="/download/midi">MIDI</a>
+        <a class="dl" id="dlXml" href="/download/xml">MusicXML</a>
+        <a class="dl" id="dlWav" href="/download/wav">WAV</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ TAB: VOICE ============ -->
+  <section class="panel" data-panel="voice">
+    <p class="lead">Optional. Add a vocal take to sit on top of the melody, or skip this
+      entirely if you just want the music.</p>
+
+    <div class="drop" id="drop">
+      <input type="file" id="vocalFile" accept="audio/*" hidden>
+      <div class="drop-inner">
+        <div class="drop-icon">&#9834;</div>
+        <p class="drop-text" id="dropText">Drop a vocal file here, or click to choose</p>
+        <p class="drop-sub">WAV, MP3, M4A, OGG &mdash; whatever you have</p>
+      </div>
+    </div>
+    <p class="hint" id="voiceHint"></p>
+  </section>
+
+  <!-- ============ TAB: MIX ============ -->
+  <section class="panel" data-panel="mix">
+    <p class="lead">Pick the instrument the melody is rendered with. The choice is applied
+      when you render or re-render the audio.</p>
+
+    <div class="inst-grid" id="instGrid">
+      {% for inst in instruments %}
+      <button class="inst-card" data-inst="{{ inst }}">{{ inst|replace('_',' ')|capitalize }}</button>
+      {% endfor %}
+    </div>
+    <p class="hint" id="mixHint">Honest note: this swaps the General-MIDI instrument. Full
+      per-band EQ isn't part of this demo &mdash; instrument choice is.</p>
+  </section>
+
+</main>
+
+<script>
+  window.T2T = {
+    instruments: {{ instruments|tojson }},
+    bgUrl: "{{ url_for('static', filename='bg.jpg') }}"
+  };
+</script>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
