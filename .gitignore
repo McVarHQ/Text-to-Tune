@@ -1,4 +1,20 @@
+# Python cache (auto-regenerated, never needed)
 __pycache__/
-*.pyc
+*.py[cod]
+*.pyo
+*.pyd
+
+# Jupyter checkpoints (auto-regenerated)
 .ipynb_checkpoints/
+
+# OS junk
 .DS_Store
+Thumbs.db
+
+# Editor/IDE settings
+.vscode/
+.idea/
+*.swp
+
+# Secrets (if you ever add any, e.g. API keys, credentials)
+.env
