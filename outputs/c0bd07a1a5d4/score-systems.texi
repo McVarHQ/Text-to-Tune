@@ -1,3 +1,5 @@
 @image{score-1}
 @image{score-2}
+@image{score-3}
+@image{score-4}
 @c eof
