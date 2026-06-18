@@ -194,9 +194,10 @@ def progress(job_id):
     })
 
 
-def _rerender(sid, program, tempo):
-    """Re-write MIDI (with program+tempo) and re-render WAV. Used on download
-    so the downloaded files always match the chosen instrument/tempo."""
+def _rerender(sid, program, tempo, metronome=False, metro_tempo=120, metro_vol=0.6):
+    """Re-write MIDI (with program+tempo, plus an optional metronome click
+    track) and re-render WAV. Used on download/playback so the files always
+    match the chosen instrument/tempo/metronome."""
     sdir = _session_dir(sid)
     midi_src = os.path.join(sdir, "generated_song.mid")
     if not os.path.exists(midi_src):
@@ -212,11 +213,45 @@ def _rerender(sid, program, tempo):
             for n in inst.notes:
                 n.start *= ratio
                 n.end *= ratio
+    # song length (after retiming) so we know how long to run the click track
+    song_end = 0.0
+    for inst in pm.instruments:
+        for n in inst.notes:
+            song_end = max(song_end, n.end)
+    if metronome and song_end > 0:
+        _add_midi_metronome(pm, song_end, metro_tempo)
     out_midi = os.path.join(sdir, "render.mid")
     pm.write(out_midi)
     wav_path = os.path.join(sdir, "generated_song.wav")
-    method = engine.render_wav(out_midi, wav_path, soundfont_path=_soundfont())
+    method = engine.render_wav(out_midi, wav_path, soundfont_path=_soundfont(),
+                               metronome=metronome, metro_tempo=metro_tempo,
+                               metro_vol=metro_vol)
     return out_midi, wav_path, method
+
+
+def _add_midi_metronome(pm, song_end, metro_tempo):
+    """Add a woodblock click track (its own instrument) at the metronome tempo."""
+    import pretty_midi
+    click = pretty_midi.Instrument(program=115, is_drum=False, name="Metronome")
+    beat = 60.0 / float(metro_tempo if metro_tempo else 120)
+    t, i = 0.0, 0
+    while t < song_end:
+        accent = (i % 4 == 0)
+        click.notes.append(pretty_midi.Note(
+            velocity=110 if accent else 80,
+            pitch=76 if accent else 77,   # high/low woodblock-ish
+            start=t, end=t + 0.05))
+        t += beat
+        i += 1
+    pm.instruments.append(click)
+
+
+def _metro_args():
+    """Parse metronome query params shared by download + render endpoints."""
+    on = request.args.get("metro", default="0") in ("1", "true", "True")
+    mt = request.args.get("metro_tempo", default=120, type=int)
+    mv = request.args.get("metro_vol", default=60, type=int) / 100.0
+    return on, mt, mv
 
 
 @app.route("/download/<kind>")
@@ -226,11 +261,11 @@ def download(kind):
         return "No session", 400
     program = request.args.get("program", default=0, type=int)
     tempo = request.args.get("tempo", default=120, type=int)
+    metro_on, metro_tempo, metro_vol = _metro_args()
     sdir = _session_dir(sid)
 
     if kind == "midi":
-        # regenerate MIDI with chosen program+tempo so it matches the DJ tab
-        out_midi, _, _ = _rerender(sid, program, tempo)
+        out_midi, _, _ = _rerender(sid, program, tempo, metro_on, metro_tempo, metro_vol)
         path = out_midi or os.path.join(sdir, "generated_song.mid")
         if not os.path.exists(path):
             return "Generate a melody first.", 404
@@ -238,8 +273,7 @@ def download(kind):
                          download_name="text_to_tune.mid", mimetype="audio/midi")
 
     if kind == "wav":
-        # always (re)render so the WAV reflects the latest instrument/tempo
-        _, wav_path, _ = _rerender(sid, program, tempo)
+        _, wav_path, _ = _rerender(sid, program, tempo, metro_on, metro_tempo, metro_vol)
         if not wav_path or not os.path.exists(wav_path):
             return "Generate a melody first.", 404
         return send_file(wav_path, as_attachment=True,
@@ -254,6 +288,18 @@ def download(kind):
                          mimetype="application/vnd.recordare.musicxml+xml")
 
     return "Unknown file", 404
+
+
+@app.route("/musicxml_raw")
+def musicxml_raw():
+    """Serve the raw MusicXML (not as attachment) for OSMD to render in-browser."""
+    sid = session.get("sid")
+    if not sid:
+        return "No session", 400
+    path = os.path.join(OUTPUTS_DIR, sid, "generated_song.xml")
+    if not os.path.exists(path):
+        return "Not available", 404
+    return send_file(path, mimetype="application/xml")
 
 
 # ---- server-side playback (no CDN): render the melody to WAV with the real

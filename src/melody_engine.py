@@ -365,19 +365,53 @@ def save_midi(results, out_path, program=0, tempo=120):
     return pm
 
 
-def render_wav(midi_path, wav_path, soundfont_path=None):
+def render_wav(midi_path, wav_path, soundfont_path=None,
+               metronome=False, metro_tempo=120, metro_vol=0.6):
     import pretty_midi
     pm = pretty_midi.PrettyMIDI(midi_path)
+    method = "sine"
+    audio = None
     if soundfont_path and os.path.exists(soundfont_path):
         try:
             audio = pm.fluidsynth(fs=44100, sf2_path=soundfont_path)
-            _write_wav(audio, wav_path)
-            return "fluidsynth"
+            method = "fluidsynth"
         except Exception:
-            pass
-    audio = pm.synthesize(fs=44100)
+            audio = None
+    if audio is None:
+        audio = pm.synthesize(fs=44100)
+        method = "sine"
+    if metronome:
+        audio = _mix_metronome(audio, 44100, metro_tempo, metro_vol)
     _write_wav(audio, wav_path)
-    return "sine"
+    return method
+
+
+def _mix_metronome(audio, fs, tempo, vol):
+    """Mix a click track into the audio at the given (independent) tempo.
+    First beat of each bar of 4 is accented."""
+    audio = np.asarray(audio, dtype=np.float64)
+    # normalise the music first so the click sits at a predictable level
+    peak = np.max(np.abs(audio)) if audio.size else 0
+    if peak > 0:
+        audio = audio / peak
+    total = len(audio)
+    beat = 60.0 / float(tempo if tempo else 120)
+    click_len = int(0.04 * fs)
+    t = np.arange(click_len) / fs
+    env = np.exp(-t * 60.0)
+    beat_idx = 0
+    pos = 0.0
+    while int(pos * fs) < total:
+        start = int(pos * fs)
+        accent = (beat_idx % 4 == 0)
+        freq = 1600.0 if accent else 1000.0
+        amp = float(vol) * (0.95 if accent else 0.7)
+        click = (np.sin(2 * np.pi * freq * t) * env * amp).astype(np.float64)
+        end = min(start + click_len, total)
+        audio[start:end] += click[: end - start]
+        pos += beat
+        beat_idx += 1
+    return audio
 
 
 def _write_wav(audio, wav_path):
