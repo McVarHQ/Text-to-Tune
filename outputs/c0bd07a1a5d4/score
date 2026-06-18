@@ -15,30 +15,92 @@ color = #(define-music-function (parser location color) (string?) #{
  
 \score  { 
  
-      << \new Staff  = xyawecwezxdadby { \clef "treble" 
+      << \new Staff  = xybzyfexabaezdc \with  { 
+         \autoBeamOff 
+          } 
+          { \clef "treble" 
              \time 4/4
              b' 4.  
-             b' 8.  
+             a' 8.  
              g' 8.  
              f' 4  
              \bar "|"  %{ end measure 1 %} 
-             b' 4.  
-             b' 8.  
-             b' 4  
-             gis' 8.  ~  
+             f' 4  
+             g' 4.  
+             g' 4.  
              \bar "|"  %{ end measure 2 %} 
-             gis' 16  
+             f' 4.  
              b' 4.  
-             a' 8.  
-             b' 4  
-             a' 8  ~  
+             \set stemRightBeamCount = #1
+             \once \override Stem #'direction = #UP 
+             a' 8. [  
+             \set stemLeftBeamCount = #2
+             \once \override Stem #'direction = #UP 
+             b' 16 ]  ~  
              \bar "|"  %{ end measure 3 %} 
-             a' 8  
+             b' 8.  
+             a' 4  
              g' 4  
-             \bar "|."  %{ end measure 4 %} 
+             f' 4  ~  
+             f' 16  ~  
+             \bar "|"  %{ end measure 4 %} 
+             f' 16  
+             g' 4.  
+             g' 4.  
+             f' 8.  ~  
+             \bar "|"  %{ end measure 5 %} 
+             f' 8.  
+             f' 4.  
+             a' 4..  ~  
+             \bar "|"  %{ end measure 6 %} 
+             \set stemRightBeamCount = #2
+             \once \override Stem #'direction = #UP 
+             a' 16 [  
+             \set stemLeftBeamCount = #1
+             \once \override Stem #'direction = #UP 
+             f' 8. ]  
+             a' 4  
+             a' 4.  
+             a' 8  ~  
+             \bar "|"  %{ end measure 7 %} 
+             a' 8  
+             g' 4.  
+             b' 2  
+             \bar "|"  %{ end measure 8 %} 
+             b' 2  
+             gis' 8.  
+             c'' 4  
+             c'' 16  ~  
+             \bar "|"  %{ end measure 9 %} 
+             c'' 8.  
+             b' 2  
+             g' 4  ~  
+             g' 16  ~  
+             \bar "|"  %{ end measure 10 %} 
+             g' 16  
+             gis' 4.  
+             gis' 4.  
+             f' 8.  ~  
+             \bar "|"  %{ end measure 11 %} 
+             f' 4  ~  
+             f' 16  
+             gis' 4.  
+             bes' 4  ~  
+             bes' 16  ~  
+             \bar "|"  %{ end measure 12 %} 
+             bes' 16  
+             gis' 4  
+             bes' 4  
+             gis' 4.  
+             gis' 16  ~  
+             \bar "|"  %{ end measure 13 %} 
+             gis' 8.  
+             bes' 4.  
+             gis' 8.  
+             \bar "|."  %{ end measure 14 %} 
               } 
             
-\addlyrics { \set alignBelowContext = #"xyawecwezxdadby"  
+\addlyrics { \set alignBelowContext = #"xybzyfexabaezdc"  
               "Make" 
               "me" 
               "love" 
@@ -52,6 +114,35 @@ color = #(define-music-function (parser location color) (string?) #{
               "kill" 
               "for" 
               "love" 
+              "Make" 
+              "love" 
+              "kill" 
+              "for" 
+              "me" 
+              "I" 
+              "am" 
+              "the" 
+              "king" 
+              "soaked" 
+              "in" 
+              "blood" 
+              "It" 
+              "is" 
+              "rain" 
+              "ing" 
+              "swords" 
+              "Will" 
+              "you" 
+              "be" 
+              "my" 
+              "love" 
+              "Will" 
+              "you" 
+              "be" 
+              "my" 
+              "love" 
+              "Will" 
+              "you" 
                } 
               
         >>

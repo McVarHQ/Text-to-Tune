@@ -26,3 +26,4 @@ Dockerfile
 docker-compose.yml
 melodies_experiments.zip
 GUI-Interface/soundfont.sf2
+test.mid

@@ -6,111 +6,193 @@
 <title>Text-to-Tune</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Outfit:wght@300;400;500&display=swap" rel="stylesheet">
+<!-- VT323 = chunky terminal; Orbitron = early-2000s techno display; Chivo Mono = readable mono body -->
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=VT323&family=Chivo+Mono:wght@300;400;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
 
-<!-- ===== Background: infinite flipping carousel of bg.jpg ===== -->
-<div class="bg-carousel" id="bgCarousel" aria-hidden="true">
-  <div class="bg-slide"></div>
-  <div class="bg-slide flipped"></div>
-  <div class="bg-slide"></div>
-  <div class="bg-slide flipped"></div>
+<!-- background: flipping carousel of bg.jpg -->
+<div class="bg-carousel" aria-hidden="true">
+  <div class="bg-slide"></div><div class="bg-slide flipped"></div>
+  <div class="bg-slide"></div><div class="bg-slide flipped"></div>
 </div>
 <div class="bg-veil" aria-hidden="true"></div>
+<!-- scanline overlay for the retro CRT feel -->
+<div class="scanlines" aria-hidden="true"></div>
 
-<main class="shell">
+<div class="frame">
 
-  <!-- ===== Title ===== -->
   <header class="masthead">
-    <h1 class="title">Text<span class="dash">&ndash;</span>to<span class="dash">&ndash;</span>Tune</h1>
+    <div class="eq-mini" aria-hidden="true">
+      <span></span><span></span><span></span><span></span><span></span>
+      <span></span><span></span><span></span><span></span><span></span>
+      <span></span><span></span>
+    </div>
+    <h1 class="title" data-text="TEXT-TO-TUNE">TEXT-TO-TUNE</h1>
     <p class="byline">A demo by Varun Anbalagan</p>
   </header>
 
-  <!-- ===== Tab bar ===== -->
-  <nav class="tabbar" role="tablist">
-    <button class="tab is-active" data-tab="compose" role="tab">Compose</button>
-    <button class="tab" data-tab="voice" role="tab">Voice</button>
-    <button class="tab" data-tab="mix" role="tab">Mix</button>
+  <!-- gated progress rail -->
+  <nav class="rail" aria-label="progress">
+    <button class="step is-active" data-step="compose">
+      <span class="step-num">01</span><span class="step-name">Compose</span>
+    </button>
+    <span class="rail-link"></span>
+    <button class="step is-locked" data-step="voice" disabled>
+      <span class="step-num">02</span><span class="step-name">Voice</span>
+    </button>
+    <span class="rail-link"></span>
+    <button class="step is-locked" data-step="dj" disabled>
+      <span class="step-num">03</span><span class="step-name">DJ Deck</span>
+    </button>
   </nav>
 
-  <!-- ============ TAB: COMPOSE ============ -->
-  <section class="panel is-active" data-panel="compose">
-    <p class="lead">Type your lyrics, one phrase per line. Every line becomes its own melodic
-      phrase, and each phrase leans on the one before it so the song holds together.</p>
+  <!-- ============ COMPOSE ============ -->
+  <section class="stage-panel is-active" data-panel="compose">
+    <div class="panel-chrome">
+      <div class="chrome-bar"><span class="led"></span> LYRIC INPUT</div>
+      <p class="lead">Type your lyrics. One line per phrase &mdash; press Enter to start a new
+        phrase. Each phrase becomes its own melody, and every phrase leans on the one before
+        it so the song holds together.</p>
 
-    <div class="editor">
-      <div class="gutter" id="gutter"><span>1</span></div>
-      <textarea id="lyrics" class="lyrics-area" spellcheck="false"
-        placeholder="Listen to the rhythm of the falling rain&#10;Telling me just what a fool I've been"></textarea>
-    </div>
-
-    <div class="compose-controls">
-      <label class="inst-pick">
-        <span>Voice it as</span>
-        <select id="instrument">
-          {% for inst in instruments %}
-          <option value="{{ inst }}">{{ inst|capitalize }}</option>
-          {% endfor %}
-        </select>
-      </label>
-      <button id="generateBtn" class="btn-primary">Compose melody</button>
-    </div>
-
-    <p class="hint" id="composeHint"></p>
-
-    <!-- Staff loading + result region -->
-    <div class="stage" id="stage" hidden>
-      <div class="stage-label" id="stageLabel">Composing&hellip;</div>
-      <div class="staves" id="staves"></div>
-    </div>
-
-    <!-- Player + downloads, shown after generation -->
-    <div class="results" id="results" hidden>
-      <div class="player-row">
-        <button id="renderBtn" class="btn-ghost">Render audio</button>
-        <audio id="player" controls preload="none"></audio>
+      <div class="editor">
+        <div class="gutter" id="gutter"><span>1</span></div>
+        <textarea id="lyrics" class="lyrics-area" spellcheck="false" wrap="off"
+          placeholder="Listen to the rhythm of the falling rain&#10;Telling me just what a fool I've been"></textarea>
       </div>
-      <div class="dl-row">
-        <a class="dl" id="dlMidi" href="/download/midi">MIDI</a>
-        <a class="dl" id="dlXml" href="/download/xml">MusicXML</a>
-        <a class="dl" id="dlWav" href="/download/wav">WAV</a>
+
+      <div class="row-actions">
+        <button id="generateBtn" class="btn-led">
+          <span class="btn-led-face">COMPOSE MELODY</span>
+        </button>
+        <span class="hint" id="composeHint"></span>
       </div>
+    </div>
+
+    <!-- staff stage: loading -> notation -->
+    <div class="score-stage" id="scoreStage" hidden>
+      <div class="chrome-bar">
+        <span class="led led-amber"></span>
+        <span id="stageLabel">COMPOSING</span>
+        <span class="eta" id="eta"></span>
+      </div>
+      <div class="score-wrap">
+        <div class="vf-host" id="vfHost">
+          <div class="vf-mount" id="vfMount"></div>
+          <div class="vf-reveal" id="vfReveal"></div>
+        </div>
+        <img class="score-fallback" id="scoreFallback" hidden alt="">
+      </div>
+    </div>
+
+    <div class="row-next" id="composeNext" hidden>
+      <button class="btn-next" id="toVoiceBtn" data-go="voice">Next &rsaquo; Voice</button>
     </div>
   </section>
 
-  <!-- ============ TAB: VOICE ============ -->
-  <section class="panel" data-panel="voice">
-    <p class="lead">Optional. Add a vocal take to sit on top of the melody, or skip this
-      entirely if you just want the music.</p>
+  <!-- ============ VOICE ============ -->
+  <section class="stage-panel" data-panel="voice">
+    <div class="panel-chrome">
+      <div class="chrome-bar"><span class="led"></span> VOICE TRACKS &mdash; OPTIONAL</div>
+      <p class="lead">Add your own audio on top of the melody &mdash; one file or several. Or
+        skip it and go straight to the deck if you just want the music.</p>
 
-    <div class="drop" id="drop">
-      <input type="file" id="vocalFile" accept="audio/*" hidden>
-      <div class="drop-inner">
-        <div class="drop-icon">&#9834;</div>
-        <p class="drop-text" id="dropText">Drop a vocal file here, or click to choose</p>
-        <p class="drop-sub">WAV, MP3, M4A, OGG &mdash; whatever you have</p>
+      <div class="drop" id="drop">
+        <input type="file" id="vocalFile" accept="audio/*" multiple hidden>
+        <div class="drop-inner">
+          <div class="drop-eq" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+          <p class="drop-text" id="dropText">Drop audio files here, or click to choose</p>
+          <p class="drop-sub">WAV / MP3 / M4A / OGG &mdash; add as many as you like</p>
+        </div>
+      </div>
+      <ul class="voice-list" id="voiceList"></ul>
+      <p class="hint" id="voiceHint"></p>
+    </div>
+
+    <div class="row-next">
+      <button class="btn-ghost" data-go="compose">&lsaquo; Back</button>
+      <button class="btn-ghost" id="skipVoiceBtn" data-go="dj">Skip &rsaquo;</button>
+      <button class="btn-next" id="toDjBtn" data-go="dj">Continue &rsaquo; DJ Deck</button>
+    </div>
+  </section>
+
+  <!-- ============ DJ DECK ============ -->
+  <section class="stage-panel" data-panel="dj">
+    <div class="panel-chrome">
+      <div class="chrome-bar">
+        <span class="led led-amber"></span> DJ DECK
+        <span class="deck-toggle">
+          <button class="seg is-active" id="modePlayback">PLAYBACK</button>
+          <button class="seg" id="modeEdit">EDIT</button>
+        </span>
+      </div>
+
+      <!-- transport + settings strip -->
+      <div class="deck-controls">
+        <button class="transport" id="playBtn" title="Play / pause">&#9654;</button>
+        <button class="transport" id="stopBtn" title="Stop">&#9632;</button>
+
+        <label class="ctl">
+          <span class="ctl-cap">INSTRUMENT</span>
+          <select id="djInstrument" class="ctl-select"></select>
+        </label>
+
+        <label class="ctl ctl-bpm">
+          <span class="ctl-cap">TEMPO</span>
+          <input type="range" id="bpm" min="40" max="220" value="120">
+          <output id="bpmOut">120 BPM</output>
+        </label>
+
+        <label class="ctl">
+          <span class="ctl-cap">METRONOME</span>
+          <span class="metro-wrap">
+            <button class="metro-toggle" id="metroToggle">OFF</button>
+            <span class="metro-vol">
+              <input type="range" id="metroVol" min="0" max="100" value="60" title="click volume">
+              <span class="metro-vol-cap">CLICK VOL</span>
+            </span>
+          </span>
+        </label>
+
+        <label class="ctl" id="trackPickWrap" hidden>
+          <span class="ctl-cap">TRACK</span>
+          <select id="trackPick" class="ctl-select"><option>Melody</option></select>
+        </label>
+      </div>
+
+      <!-- PLAYBACK view: falling notes over the keyboard -->
+      <div class="playback" id="playbackView">
+        <canvas id="rollCanvas" class="roll-canvas"></canvas>
+        <img id="pianoImg" class="piano-img" src="{{ url_for('static', filename='pianotify.png') }}" alt="keyboard">
+      </div>
+
+      <!-- EDIT view: placeholder for the deferred multitrack editor -->
+      <div class="edit-view" id="editView" hidden>
+        <div class="edit-empty">
+          <div class="drop-eq" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+          <p>Multitrack editor &mdash; coming in the next build.</p>
+          <p class="edit-sub">Playback mode is ready now: choose an instrument, set the tempo,
+            toggle the metronome, and hear your melody.</p>
+        </div>
+      </div>
+
+      <!-- downloads live here -->
+      <div class="downloads">
+        <span class="dl-cap">EXPORT</span>
+        <a class="dl" id="dlMidi">MIDI</a>
+        <a class="dl" id="dlXml">MusicXML</a>
+        <a class="dl" id="dlWav">WAV</a>
+        <span class="hint" id="djHint"></span>
       </div>
     </div>
-    <p class="hint" id="voiceHint"></p>
-  </section>
 
-  <!-- ============ TAB: MIX ============ -->
-  <section class="panel" data-panel="mix">
-    <p class="lead">Pick the instrument the melody is rendered with. The choice is applied
-      when you render or re-render the audio.</p>
-
-    <div class="inst-grid" id="instGrid">
-      {% for inst in instruments %}
-      <button class="inst-card" data-inst="{{ inst }}">{{ inst|replace('_',' ')|capitalize }}</button>
-      {% endfor %}
+    <div class="row-next">
+      <button class="btn-ghost" data-go="voice">&lsaquo; Back</button>
     </div>
-    <p class="hint" id="mixHint">Honest note: this swaps the General-MIDI instrument. Full
-      per-band EQ isn't part of this demo &mdash; instrument choice is.</p>
   </section>
 
-</main>
+</div>
 
 <script>
   window.T2T = {
@@ -118,6 +200,9 @@
     bgUrl: "{{ url_for('static', filename='bg.jpg') }}"
   };
 </script>
+<!-- VexFlow renders the live notation (staff draws in, then notes land on it).
+     Loaded defensively: if it fails, the app falls back to the PNG. -->
+<script src="https://cdn.jsdelivr.net/npm/vexflow@4.2.2/build/cjs/vexflow.js"></script>
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>
