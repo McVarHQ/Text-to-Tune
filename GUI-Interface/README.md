@@ -1,74 +1,63 @@
-# Text-to-Tune GUI
+# Text-to-Tune GUI  (staged build: Compose -> Voice -> DJ Deck)
 
-A web interface for the Lyrics2Melody project. Type lyrics line by line, generate
-a melody for each line (with light continuity between lines), see the notation, and
-download MIDI / MusicXML / WAV.
+A retro-equalizer web interface for the Lyrics2Melody project. Type lyrics line
+by line, watch each phrase generate with a real-time progress bar, see the
+notation, then play it back on a pianotify-style deck with 128 instruments,
+tempo, and a metronome.
 
-## Where each file goes
-
-This GUI is **two** pieces that live in different places in your project:
+## File placement (unchanged from before, plus a soundfont)
 
 ```
-Text-to-Tune/                      <- your existing project root
-├── melody_engine.py               <-  PUT THIS IN  src/   (next to utils.py)
-├── utils.py                       (existing)
-├── midi_statistics.py             (existing)
-├── enc_models/                    (existing)
-├── saved_gan_models/              (existing)
-├── outputs/                       (created automatically; MIDI saved here)
+Text-to-Tune/                       <- project root (= "src")
+├── melody_engine.py                <-  PUT IN PROJECT ROOT (next to utils.py)
+├── utils.py  midi_statistics.py    (existing)
+├── enc_models/  saved_gan_models/  (existing)
+├── outputs/                        (auto; MIDI saved per session here)
 │
-└── GUI-Interface/                 <-  THIS WHOLE FOLDER goes in the project root
+└── GUI-Interface/                  <-  THIS FOLDER in the project root
     ├── app.py
-    ├── soundfont.sf2              <-  YOU ADD THIS (see "Soundfont" below)
-    ├── templates/
-    │   └── index.html
+    ├── README.md
+    ├── FluidR3_GM.sf2              <-  PUT YOUR SOUNDFONT HERE (for WAV export)
+    ├── templates/index.html
     └── static/
         ├── style.css
         ├── app.js
-        ├── bg.jpg                 <-  YOU ADD THIS (your 5000x5000 background)
-        └── music_symbols/         <-  YOU ADD THIS (the symbol PNGs)
-            ├── 01_clef_bass_treble_system.png
-            ├── ... (all the rest)
-            └── 38_beamed_group_I.png
+        ├── bg.jpg                  <-  your background
+        ├── pianotify.png           <-  your keyboard image
+        └── music_symbols/          <-  the note PNGs
 ```
 
-Important: `melody_engine.py` is the ONE file that lives in `src/` (the project
-root, alongside `utils.py`), because it imports `utils` and `midi_statistics` and
-loads the model. Everything else lives inside `GUI-Interface/`.
+## Two soundfont roles (important)
+- **Browser playback** (instant instrument switching) loads GM instruments from
+  a CDN automatically via soundfont-player — nothing for you to install.
+- **WAV export** (the download) renders server-side with your real
+  `FluidR3_GM.sf2`. Put that file at `GUI-Interface/FluidR3_GM.sf2`
+  (or `soundfont.sf2`). If it's missing, WAV export still works but falls back
+  to a plain synth.
 
-## Assets you need to drop in
-
-1. **`static/bg.jpg`** — your background image (the equalizer artwork). Any size;
-   it's scaled to fit width.
-2. **`static/music_symbols/`** — the folder of note/rest/clef PNGs. The filenames
-   the code references are listed in `static/app.js` (the `SYM` object). If your
-   filenames differ, edit that object — it's all in one place.
-3. **`GUI-Interface/soundfont.sf2`** — a General MIDI soundfont, for good audio.
-   Without it, audio still works but uses a robotic sine synth. A free one:
-   "FluidR3_GM" or any `.sf2` GM soundfont. Rename it to `soundfont.sf2`.
-
-## Running it
-
-From inside the Docker container (the only place the model runs), at the project
-root:
-
+## Run
+From the project root, inside the Docker container:
 ```
 python GUI-Interface/app.py
 ```
+Open http://localhost:5000
 
-Then open **http://localhost:5000** in your browser.
+## What this stage includes
+- Line-numbered lyrics; lines split only when you press Enter (long lines scroll,
+  they don't wrap into phantom phrases).
+- Real-time progress bar: a fixed estimate for phrase 1, then a rolling average
+  of measured phrase times — the staff fills against actual elapsed time.
+- One notation render: the loading staves resolve into real (dark-themed)
+  LilyPond notation. No separate white box.
+- Gated flow: Compose unlocks Voice unlocks DJ Deck.
+- Voice tab: optional, multiple audio uploads, or skip.
+- DJ Deck (Playback): falling-note piano roll over your keyboard image synced to
+  audio; 128 GM instruments (instant switch); tempo slider; metronome with
+  volume + 1st-beat accent. Downloads (MIDI / MusicXML / WAV) live here and
+  re-render server-side to match the chosen instrument + tempo.
+- DJ Deck (Edit): placeholder — the multitrack editor is the next stage.
 
-(Port 5000 is exposed in docker-compose.yml alongside Jupyter's 8888.)
-
-## Notes on what's real vs. simplified
-
-- **Per-line continuity**: each line's random seed is derived from the previous
-  line's pitches, so consecutive phrases relate to each other. It's a light touch,
-  not a re-trained model.
-- **Notation**: rendered for real by LilyPond (via music21) when available — the
-  `score_png` under the staves. The animated staves themselves use your symbol
-  PNGs positioned by pitch, as a live loading visual.
-- **Audio / instruments**: the Mix tab swaps the General-MIDI instrument the WAV is
-  rendered with. Full per-band EQ is intentionally out of scope.
-- **Storage**: only MIDI is persisted, in `outputs/<session_id>/`. WAV and MusicXML
-  are generated on demand and offered as browser downloads.
+## Deferred to the next stage (deliberately)
+The multitrack **Edit** mode: layering multiple instrument versions + the
+uploaded vocal stems on a timeline, aligning them, and bouncing a final mix.
+That's a separate, larger build.

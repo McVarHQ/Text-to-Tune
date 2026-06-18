@@ -2,46 +2,25 @@
 """
 melody_engine.py  --  Core Lyrics2Melody logic (the ONE file that lives in src/)
 ================================================================================
+Pure functions behind the Text-to-Tune GUI. No Flask here.
 
-This module is the reusable engine behind the Text-to-Tune GUI. It contains
-no Flask / web code on purpose: it's pure functions the web layer calls, so it
-can also be used from a notebook or the command line.
-
-It must live alongside the original project's `utils.py` and
-`midi_statistics.py`, and have access to:
+Must sit alongside the original project's utils.py + midi_statistics.py, with:
     ./enc_models/syllEncoding_20190419.bin
     ./enc_models/wordLevelEncoder_20190419.bin
     ./saved_gan_models/saved_model_best_overall_mmd/
-
-What it does, end to end:
-    typed line of lyrics
-      -> syllable split (pyphen)
-      -> per-syllable (syllable-embedding + word-embedding) conditioning vector
-      -> trained GAN generates [pitch, duration, rest] triplets
-      -> tuned to a musical scale + discretized
-      -> MIDI (via pretty_midi)  +  optional WAV (via fluidsynth soundfont)
-                                 +  optional MusicXML / LilyPond notation
-
-Multi-line:
-    Each line is generated independently BUT the random seed for line N is
-    derived from line N-1's generated pitches, so consecutive lines vary in a
-    related way rather than being fully independent draws. This is a light
-    "continuity" touch, not a re-architecture of the model.
 """
 
 import hashlib
 import os
+import re
 import sys
 
 import numpy as np
 
-# --- Optional deps: import lazily / defensively so a missing one gives a
-#     clear message rather than an import-time crash of the whole app. ---
 try:
     import pyphen
 except ImportError:
     pyphen = None
-
 try:
     from gensim.models import Word2Vec
 except ImportError:
@@ -55,10 +34,6 @@ if tf.__version__.startswith("2"):
 import utils
 import midi_statistics
 
-
-# ---------------------------------------------------------------------------
-# Config -- matches the values the GAN was trained with (from "4. Create song")
-# ---------------------------------------------------------------------------
 SONG_LENGTH = 20
 NUM_MIDI_FEATURES = 3
 
@@ -66,34 +41,154 @@ DEFAULT_SYLL_MODEL = "./enc_models/syllEncoding_20190419.bin"
 DEFAULT_WORD_MODEL = "./enc_models/wordLevelEncoder_20190419.bin"
 DEFAULT_GAN_MODEL = "./saved_gan_models/saved_model_best_overall_mmd"
 
-# General MIDI program numbers for the instruments we expose in the DJ tab.
-# (These are the standard GM patch numbers; fluidsynth maps them to the
-# matching instrument in any General-MIDI soundfont.)
-INSTRUMENTS = {
-    "piano": 0,        # Acoustic Grand Piano
-    "guitar": 24,      # Nylon Acoustic Guitar
-    "bass": 33,        # Electric Bass (finger)
-    "strings": 48,     # String Ensemble
-    "epiano": 4,       # Electric Piano
-    "music_box": 10,   # Music Box
-    "flute": 73,       # Flute
-    "synth": 80,       # Synth Lead (square)
-}
+# Full General MIDI Level-1 instrument list (program 0-127), with the
+# soundfont-player CDN name for each (gleitz MIDI-js soundfonts, FluidR3_GM).
+GM_INSTRUMENTS = [
+    {"p":0,"n":"Acoustic Grand Piano","sf":"acoustic_grand_piano"},
+    {"p":1,"n":"Bright Acoustic Piano","sf":"bright_acoustic_piano"},
+    {"p":2,"n":"Electric Grand Piano","sf":"electric_grand_piano"},
+    {"p":3,"n":"Honky-tonk Piano","sf":"honky_tonk_piano"},
+    {"p":4,"n":"Electric Piano 1","sf":"electric_piano_1"},
+    {"p":5,"n":"Electric Piano 2","sf":"electric_piano_2"},
+    {"p":6,"n":"Harpsichord","sf":"harpsichord"},
+    {"p":7,"n":"Clavinet","sf":"clavinet"},
+    {"p":8,"n":"Celesta","sf":"celesta"},
+    {"p":9,"n":"Glockenspiel","sf":"glockenspiel"},
+    {"p":10,"n":"Music Box","sf":"music_box"},
+    {"p":11,"n":"Vibraphone","sf":"vibraphone"},
+    {"p":12,"n":"Marimba","sf":"marimba"},
+    {"p":13,"n":"Xylophone","sf":"xylophone"},
+    {"p":14,"n":"Tubular Bells","sf":"tubular_bells"},
+    {"p":15,"n":"Dulcimer","sf":"dulcimer"},
+    {"p":16,"n":"Drawbar Organ","sf":"drawbar_organ"},
+    {"p":17,"n":"Percussive Organ","sf":"percussive_organ"},
+    {"p":18,"n":"Rock Organ","sf":"rock_organ"},
+    {"p":19,"n":"Church Organ","sf":"church_organ"},
+    {"p":20,"n":"Reed Organ","sf":"reed_organ"},
+    {"p":21,"n":"Accordion","sf":"accordion"},
+    {"p":22,"n":"Harmonica","sf":"harmonica"},
+    {"p":23,"n":"Tango Accordion","sf":"tango_accordion"},
+    {"p":24,"n":"Acoustic Guitar (nylon)","sf":"acoustic_guitar_nylon"},
+    {"p":25,"n":"Acoustic Guitar (steel)","sf":"acoustic_guitar_steel"},
+    {"p":26,"n":"Electric Guitar (jazz)","sf":"electric_guitar_jazz"},
+    {"p":27,"n":"Electric Guitar (clean)","sf":"electric_guitar_clean"},
+    {"p":28,"n":"Electric Guitar (muted)","sf":"electric_guitar_muted"},
+    {"p":29,"n":"Overdriven Guitar","sf":"overdriven_guitar"},
+    {"p":30,"n":"Distortion Guitar","sf":"distortion_guitar"},
+    {"p":31,"n":"Guitar Harmonics","sf":"guitar_harmonics"},
+    {"p":32,"n":"Acoustic Bass","sf":"acoustic_bass"},
+    {"p":33,"n":"Electric Bass (finger)","sf":"electric_bass_finger"},
+    {"p":34,"n":"Electric Bass (pick)","sf":"electric_bass_pick"},
+    {"p":35,"n":"Fretless Bass","sf":"fretless_bass"},
+    {"p":36,"n":"Slap Bass 1","sf":"slap_bass_1"},
+    {"p":37,"n":"Slap Bass 2","sf":"slap_bass_2"},
+    {"p":38,"n":"Synth Bass 1","sf":"synth_bass_1"},
+    {"p":39,"n":"Synth Bass 2","sf":"synth_bass_2"},
+    {"p":40,"n":"Violin","sf":"violin"},
+    {"p":41,"n":"Viola","sf":"viola"},
+    {"p":42,"n":"Cello","sf":"cello"},
+    {"p":43,"n":"Contrabass","sf":"contrabass"},
+    {"p":44,"n":"Tremolo Strings","sf":"tremolo_strings"},
+    {"p":45,"n":"Pizzicato Strings","sf":"pizzicato_strings"},
+    {"p":46,"n":"Orchestral Harp","sf":"orchestral_harp"},
+    {"p":47,"n":"Timpani","sf":"timpani"},
+    {"p":48,"n":"String Ensemble 1","sf":"string_ensemble_1"},
+    {"p":49,"n":"String Ensemble 2","sf":"string_ensemble_2"},
+    {"p":50,"n":"Synth Strings 1","sf":"synth_strings_1"},
+    {"p":51,"n":"Synth Strings 2","sf":"synth_strings_2"},
+    {"p":52,"n":"Choir Aahs","sf":"choir_aahs"},
+    {"p":53,"n":"Voice Oohs","sf":"voice_oohs"},
+    {"p":54,"n":"Synth Voice","sf":"synth_voice"},
+    {"p":55,"n":"Orchestra Hit","sf":"orchestra_hit"},
+    {"p":56,"n":"Trumpet","sf":"trumpet"},
+    {"p":57,"n":"Trombone","sf":"trombone"},
+    {"p":58,"n":"Tuba","sf":"tuba"},
+    {"p":59,"n":"Muted Trumpet","sf":"muted_trumpet"},
+    {"p":60,"n":"French Horn","sf":"french_horn"},
+    {"p":61,"n":"Brass Section","sf":"brass_section"},
+    {"p":62,"n":"Synth Brass 1","sf":"synth_brass_1"},
+    {"p":63,"n":"Synth Brass 2","sf":"synth_brass_2"},
+    {"p":64,"n":"Soprano Sax","sf":"soprano_sax"},
+    {"p":65,"n":"Alto Sax","sf":"alto_sax"},
+    {"p":66,"n":"Tenor Sax","sf":"tenor_sax"},
+    {"p":67,"n":"Baritone Sax","sf":"baritone_sax"},
+    {"p":68,"n":"Oboe","sf":"oboe"},
+    {"p":69,"n":"English Horn","sf":"english_horn"},
+    {"p":70,"n":"Bassoon","sf":"bassoon"},
+    {"p":71,"n":"Clarinet","sf":"clarinet"},
+    {"p":72,"n":"Piccolo","sf":"piccolo"},
+    {"p":73,"n":"Flute","sf":"flute"},
+    {"p":74,"n":"Recorder","sf":"recorder"},
+    {"p":75,"n":"Pan Flute","sf":"pan_flute"},
+    {"p":76,"n":"Blown Bottle","sf":"blown_bottle"},
+    {"p":77,"n":"Shakuhachi","sf":"shakuhachi"},
+    {"p":78,"n":"Whistle","sf":"whistle"},
+    {"p":79,"n":"Ocarina","sf":"ocarina"},
+    {"p":80,"n":"Lead 1 (square)","sf":"lead_1_square"},
+    {"p":81,"n":"Lead 2 (sawtooth)","sf":"lead_2_sawtooth"},
+    {"p":82,"n":"Lead 3 (calliope)","sf":"lead_3_calliope"},
+    {"p":83,"n":"Lead 4 (chiff)","sf":"lead_4_chiff"},
+    {"p":84,"n":"Lead 5 (charang)","sf":"lead_5_charang"},
+    {"p":85,"n":"Lead 6 (voice)","sf":"lead_6_voice"},
+    {"p":86,"n":"Lead 7 (fifths)","sf":"lead_7_fifths"},
+    {"p":87,"n":"Lead 8 (bass + lead)","sf":"lead_8_bass_plus_lead"},
+    {"p":88,"n":"Pad 1 (new age)","sf":"pad_1_new_age"},
+    {"p":89,"n":"Pad 2 (warm)","sf":"pad_2_warm"},
+    {"p":90,"n":"Pad 3 (polysynth)","sf":"pad_3_polysynth"},
+    {"p":91,"n":"Pad 4 (choir)","sf":"pad_4_choir"},
+    {"p":92,"n":"Pad 5 (bowed)","sf":"pad_5_bowed"},
+    {"p":93,"n":"Pad 6 (metallic)","sf":"pad_6_metallic"},
+    {"p":94,"n":"Pad 7 (halo)","sf":"pad_7_halo"},
+    {"p":95,"n":"Pad 8 (sweep)","sf":"pad_8_sweep"},
+    {"p":96,"n":"FX 1 (rain)","sf":"fx_1_rain"},
+    {"p":97,"n":"FX 2 (soundtrack)","sf":"fx_2_soundtrack"},
+    {"p":98,"n":"FX 3 (crystal)","sf":"fx_3_crystal"},
+    {"p":99,"n":"FX 4 (atmosphere)","sf":"fx_4_atmosphere"},
+    {"p":100,"n":"FX 5 (brightness)","sf":"fx_5_brightness"},
+    {"p":101,"n":"FX 6 (goblins)","sf":"fx_6_goblins"},
+    {"p":102,"n":"FX 7 (echoes)","sf":"fx_7_echoes"},
+    {"p":103,"n":"FX 8 (sci-fi)","sf":"fx_8_sci_fi"},
+    {"p":104,"n":"Sitar","sf":"sitar"},
+    {"p":105,"n":"Banjo","sf":"banjo"},
+    {"p":106,"n":"Shamisen","sf":"shamisen"},
+    {"p":107,"n":"Koto","sf":"koto"},
+    {"p":108,"n":"Kalimba","sf":"kalimba"},
+    {"p":109,"n":"Bagpipe","sf":"bagpipe"},
+    {"p":110,"n":"Fiddle","sf":"fiddle"},
+    {"p":111,"n":"Shanai","sf":"shanai"},
+    {"p":112,"n":"Tinkle Bell","sf":"tinkle_bell"},
+    {"p":113,"n":"Agogo","sf":"agogo"},
+    {"p":114,"n":"Steel Drums","sf":"steel_drums"},
+    {"p":115,"n":"Woodblock","sf":"woodblock"},
+    {"p":116,"n":"Taiko Drum","sf":"taiko_drum"},
+    {"p":117,"n":"Melodic Tom","sf":"melodic_tom"},
+    {"p":118,"n":"Synth Drum","sf":"synth_drum"},
+    {"p":119,"n":"Reverse Cymbal","sf":"reverse_cymbal"},
+    {"p":120,"n":"Guitar Fret Noise","sf":"guitar_fret_noise"},
+    {"p":121,"n":"Breath Noise","sf":"breath_noise"},
+    {"p":122,"n":"Seashore","sf":"seashore"},
+    {"p":123,"n":"Bird Tweet","sf":"bird_tweet"},
+    {"p":124,"n":"Telephone Ring","sf":"telephone_ring"},
+    {"p":125,"n":"Helicopter","sf":"helicopter"},
+    {"p":126,"n":"Applause","sf":"applause"},
+    {"p":127,"n":"Gunshot","sf":"gunshot"},
+]
 
+
+# program number -> display name, for convenience
+PROGRAM_TO_NAME = {i["p"]: i["n"] for i in GM_INSTRUMENTS}
 
 # ---------------------------------------------------------------------------
-# Model loading -- cache loaded models at module level so the web app loads
-# them once on first use, not on every request.
+# Model loading (cached at module level)
 # ---------------------------------------------------------------------------
 _syll_model = None
 _word_model = None
 
 
 def load_embedding_models(syll_path=DEFAULT_SYLL_MODEL, word_path=DEFAULT_WORD_MODEL):
-    """Load (and cache) the syllable + word Word2Vec models."""
     global _syll_model, _word_model
     if Word2Vec is None:
-        raise RuntimeError("gensim is not installed. `pip install gensim`.")
+        raise RuntimeError("gensim is not installed.")
     if _syll_model is None:
         _syll_model = Word2Vec.load(syll_path)
     if _word_model is None:
@@ -102,7 +197,7 @@ def load_embedding_models(syll_path=DEFAULT_SYLL_MODEL, word_path=DEFAULT_WORD_M
 
 
 # ---------------------------------------------------------------------------
-# Vocabulary helpers (tolerant of gensim 3.x vs 4.x API differences)
+# Vocabulary helpers (gensim 3.x / 4.x tolerant)
 # ---------------------------------------------------------------------------
 def _in_vocab(model_wv, key):
     try:
@@ -115,8 +210,6 @@ def _in_vocab(model_wv, key):
 
 
 def _get_embedding(model_wv, key, default_vec):
-    """Look up an embedding, trying case variants; fall back to default_vec.
-    Returns (vector, matched_key_or_None)."""
     for candidate in (key, key.lower(), key.capitalize(), key.upper()):
         if _in_vocab(model_wv, candidate):
             return model_wv[candidate], candidate
@@ -124,17 +217,14 @@ def _get_embedding(model_wv, key, default_vec):
 
 
 def _centroid(model_wv):
-    """Mean of all vectors -- a 'neutral' fallback for unknown tokens."""
     if hasattr(model_wv, "vectors"):
         return model_wv.vectors.mean(axis=0)
     return np.array([model_wv[k] for k in model_wv.index_to_key]).mean(axis=0)
 
 
 # ---------------------------------------------------------------------------
-# Lyrics -> syllables -> conditioning vector
+# Lyrics -> syllables -> conditioning
 # ---------------------------------------------------------------------------
-import re
-
 _dic = None
 
 
@@ -155,19 +245,36 @@ def _clean(word):
     return re.sub(r"^[^\w']+|[^\w']+$", "", word)
 
 
+def _tokenize_words(line_text):
+    """Robust word extraction:
+      - lowercase everything
+      - split punctuation off words even when there's no surrounding space,
+        so "fool,bar" -> ["fool", "bar"] and "me!" -> ["me"]
+      - keep word-internal apostrophes ("don't" stays one word)
+    Pure punctuation tokens are dropped (they separate words but don't become
+    notes). Returns a flat list of lowercase word strings.
+    """
+    text = line_text.lower()
+    # insert spaces around any run of non-word, non-apostrophe characters,
+    # so punctuation glued to words gets separated into its own token
+    text = re.sub(r"([^\w'\s]+)", r" \1 ", text)
+    raw = text.split()
+    words = []
+    for tok in raw:
+        w = _clean(tok)               # strip any leftover edge punctuation
+        if w and re.search(r"[a-z0-9]", w):   # keep only tokens with a letter/digit
+            words.append(w)
+    return words
+
+
 def line_to_condition(line_text, syll_model, word_model):
-    """Turn one line of lyrics into (flattened_cond, used_length, oov_report,
-    syllable_words). Unknown tokens use a neutral centroid embedding so the
-    line keeps its structure instead of crashing."""
     syll_default = _centroid(syll_model.wv)
     word_default = _centroid(word_model.wv)
-
-    words = [w for w in (_clean(w) for w in line_text.split()) if w]
+    words = _tokenize_words(line_text)
     pairs = []
     for word in words:
         for syll in _syllabify(word):
             pairs.append((syll, word))
-
     conditions, oov_report, syl_words = [], [], []
     for syll, word in pairs:
         svec, sused = _get_embedding(syll_model.wv, syll, syll_default)
@@ -175,13 +282,9 @@ def line_to_condition(line_text, syll_model, word_model):
         conditions.append(np.concatenate((svec, wvec)))
         oov_report.append(sused is None or wused is None)
         syl_words.append((syll, word))
-
     if not conditions:
         return None, 0, [], []
-
     used_length = min(len(conditions), SONG_LENGTH)
-
-    # pad / truncate to SONG_LENGTH
     if len(conditions) > SONG_LENGTH:
         conditions = conditions[:SONG_LENGTH]
         syl_words = syl_words[:SONG_LENGTH]
@@ -189,7 +292,6 @@ def line_to_condition(line_text, syll_model, word_model):
     elif len(conditions) < SONG_LENGTH:
         pad = np.concatenate((syll_default, word_default))
         conditions += [pad] * (SONG_LENGTH - len(conditions))
-
     flat = []
     for vec in conditions:
         flat.extend(vec)
@@ -197,7 +299,7 @@ def line_to_condition(line_text, syll_model, word_model):
 
 
 # ---------------------------------------------------------------------------
-# GAN inference  (one persistent TF session reused across lines/requests)
+# GAN inference (one persistent session)
 # ---------------------------------------------------------------------------
 _sess = None
 _tensors = None
@@ -222,9 +324,6 @@ def _ensure_session(model_path=DEFAULT_GAN_MODEL):
 
 
 def generate_line(flattened_cond, seed=None, model_path=DEFAULT_GAN_MODEL):
-    """Run the GAN for a single line. `seed` makes the random songdata input
-    reproducible AND lets us chain lines for continuity. Returns a tuned,
-    discretized list of [pitch, duration, rest]."""
     _ensure_session(model_path)
     rng = np.random.RandomState(seed) if seed is not None else np.random
     songdata = rng.uniform(size=(1, SONG_LENGTH, NUM_MIDI_FEATURES))
@@ -239,75 +338,36 @@ def generate_line(flattened_cond, seed=None, model_path=DEFAULT_GAN_MODEL):
 
 
 def _seed_from_pitches(sample, used_length):
-    """Derive a stable integer seed from a line's generated pitches, so the
-    NEXT line's random draw is influenced by this line's ending -> a light
-    sense of continuity between consecutive lines."""
     pitches = [int(round(s[0])) for s in sample[:used_length]]
     h = hashlib.sha256(str(pitches).encode()).hexdigest()
     return int(h[:8], 16)
 
 
-def generate_multiline(lines, model_path=DEFAULT_GAN_MODEL):
-    """Generate a melody for each non-empty line, chaining seeds for
-    continuity. Returns a list of per-line dicts."""
-    syll_model, word_model = load_embedding_models()
-    results = []
-    prev_seed = None
-    for idx, line in enumerate(lines):
-        if not line.strip():
-            continue
-        flat, used_len, oov, syl_words = line_to_condition(line, syll_model, word_model)
-        if flat is None:
-            continue
-        sample = generate_line(flat, seed=prev_seed, model_path=model_path)
-        prev_seed = _seed_from_pitches(sample, used_len)
-        results.append({
-            "line_index": idx,
-            "text": line,
-            "sample": sample,
-            "used_length": used_len,
-            "oov_flags": oov,
-            "syllable_words": syl_words,
-        })
-    return results
-
-
 # ---------------------------------------------------------------------------
-# Output: MIDI, WAV (soundfont), MusicXML, LilyPond-rendered notation
+# Output: MIDI, WAV, MusicXML, dark-themed notation PNG
 # ---------------------------------------------------------------------------
-def save_midi(results, out_path, instrument="piano"):
-    """Concatenate all lines into one pretty_midi object and write a .mid.
-    Returns the pretty_midi object too (for downstream WAV/score rendering)."""
+def save_midi(results, out_path, program=0, tempo=120):
     import pretty_midi
-    program = INSTRUMENTS.get(instrument, 0)
-    pm = pretty_midi.PrettyMIDI()
+    pm = pretty_midi.PrettyMIDI(initial_tempo=tempo)
     inst = pretty_midi.Instrument(program=program)
-    tempo = 120
     t = 0.0
     for res in results:
         sample = res["sample"][: res["used_length"]]
         for i in range(len(sample)):
             length = sample[i][1] * 60.0 / tempo
             gap = (sample[i + 1][2] * 60.0 / tempo) if i < len(sample) - 1 else 0.0
-            note = pretty_midi.Note(
-                velocity=100, pitch=int(sample[i][0]), start=t, end=t + length
-            )
+            note = pretty_midi.Note(velocity=100, pitch=int(sample[i][0]), start=t, end=t + length)
             inst.notes.append(note)
             t += length + gap
-        t += 0.3  # small breath between lines
+        t += 0.3
     pm.instruments.append(inst)
     pm.write(out_path)
     return pm
 
 
 def render_wav(midi_path, wav_path, soundfont_path=None):
-    """Render a MIDI file to WAV using a soundfont via fluidsynth. Falls back
-    to pretty_midi's sine synth if fluidsynth/soundfont unavailable (and says
-    so by returning the method used)."""
     import pretty_midi
     pm = pretty_midi.PrettyMIDI(midi_path)
-
-    # Try fluidsynth + soundfont first (good quality).
     if soundfont_path and os.path.exists(soundfont_path):
         try:
             audio = pm.fluidsynth(fs=44100, sf2_path=soundfont_path)
@@ -315,8 +375,6 @@ def render_wav(midi_path, wav_path, soundfont_path=None):
             return "fluidsynth"
         except Exception:
             pass
-
-    # Fallback: built-in sine synth (robotic but always works).
     audio = pm.synthesize(fs=44100)
     _write_wav(audio, wav_path)
     return "sine"
@@ -329,29 +387,20 @@ def _write_wav(audio, wav_path):
     wavfile.write(wav_path, 44100, (audio * 32767).astype(np.int16))
 
 
-def save_musicxml(results, xml_path):
-    """Write MusicXML using music21, so the user can open it in any notation
-    program. Returns True on success, False if music21 isn't available."""
+def save_musicxml(results, xml_path, tempo=120):
     try:
         from music21 import stream, note as m21note, tempo as m21tempo, meter
     except ImportError:
         return False
-
     s = stream.Stream()
-    s.append(m21tempo.MetronomeMark(number=120))
+    s.append(m21tempo.MetronomeMark(number=tempo))
     s.append(meter.TimeSignature("4/4"))
-
-    # Map our duration values (in quarter-note beats) onto the closest
-    # quarterLength music21 understands.
     for res in results:
         sample = res["sample"][: res["used_length"]]
         syl_words = res["syllable_words"]
         for i in range(len(sample)):
-            pitch_val = int(sample[i][0])
-            dur_beats = float(sample[i][1])
-            n = m21note.Note(pitch_val)
-            n.quarterLength = max(0.25, round(dur_beats * 4) / 4.0)
-            # attach the syllable as a lyric, like the screenshot's alignment
+            n = m21note.Note(int(sample[i][0]))
+            n.quarterLength = max(0.25, round(float(sample[i][1]) * 4) / 4.0)
             if i < len(syl_words):
                 n.lyric = syl_words[i][0]
             s.append(n)
@@ -360,19 +409,41 @@ def save_musicxml(results, xml_path):
 
 
 def render_score_png(xml_path, png_path_prefix):
-    """Render notation to PNG using LilyPond (via music21's converter).
-    Returns the path to the generated PNG, or None if LilyPond isn't
-    installed. music21 shells out to lilypond, which must be on PATH."""
+    """Render notation to PNG via LilyPond (music21 shells out). Returns path
+    or None. We post-process the PNG to be transparent + light-inked so it sits
+    on the dark UI instead of being a white box."""
     try:
-        from music21 import converter, environment
+        from music21 import converter
     except ImportError:
         return None
     try:
-        us = environment.UserSettings()
-        # music21 auto-detects lilypond on PATH; if installed at a custom
-        # location, the Dockerfile sets it. We just attempt the conversion.
         score = converter.parse(xml_path)
         out = score.write("lily.png", fp=png_path_prefix)
-        return str(out)
+        out = str(out)
+        _theme_png(out)
+        return out
     except Exception:
         return None
+
+
+def _theme_png(png_path):
+    """Make a black-on-white LilyPond PNG into light-ink-on-transparent so it
+    blends with the dark UI. White -> transparent, black ink -> pale lavender."""
+    try:
+        from PIL import Image
+        img = Image.open(png_path).convert("RGBA")
+        px = img.getdata()
+        out = []
+        for r, g, b, a in px:
+            # luminance: white background -> transparent; dark ink -> light tint
+            lum = (r + g + b) / 3
+            if lum > 200:
+                out.append((0, 0, 0, 0))            # transparent background
+            else:
+                # pale lavender ink, alpha scaled by how dark the pixel was
+                ink = int(255 - lum)
+                out.append((222, 226, 255, min(255, ink + 80)))
+        img.putdata(out)
+        img.save(png_path)
+    except Exception:
+        pass  # if PIL missing or anything fails, leave the original PNG
