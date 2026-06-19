@@ -78,11 +78,12 @@
         <span class="eta" id="eta"></span>
       </div>
       <div class="score-wrap">
-        <div class="vf-host" id="vfHost">
-          <div class="vf-mount" id="vfMount"></div>
-          <div class="vf-reveal" id="vfReveal"></div>
+        <div class="score-host" id="scoreHost">
+          <!-- loading: lightweight staff lines that "draw in" left-to-right -->
+          <div class="load-staves" id="loadStaves"></div>
+          <!-- done: detailed OSMD notation appears here -->
+          <div class="osmd-mount" id="osmdMount"></div>
         </div>
-        <img class="score-fallback" id="scoreFallback" hidden alt="">
       </div>
     </div>
 
@@ -128,7 +129,7 @@
         </span>
       </div>
 
-      <!-- transport + settings strip -->
+      <!-- transport + selectors strip -->
       <div class="deck-controls">
         <button class="transport" id="playBtn" title="Play / pause">&#9654;</button>
         <button class="transport" id="stopBtn" title="Stop">&#9632;</button>
@@ -138,21 +139,9 @@
           <select id="djInstrument" class="ctl-select"></select>
         </label>
 
-        <label class="ctl ctl-bpm">
-          <span class="ctl-cap">TEMPO</span>
-          <input type="range" id="bpm" min="40" max="220" value="120">
-          <output id="bpmOut">120 BPM</output>
-        </label>
-
         <label class="ctl">
           <span class="ctl-cap">METRONOME</span>
-          <span class="metro-wrap">
-            <button class="metro-toggle" id="metroToggle">OFF</button>
-            <span class="metro-vol">
-              <input type="range" id="metroVol" min="0" max="100" value="60" title="click volume">
-              <span class="metro-vol-cap">CLICK VOL</span>
-            </span>
-          </span>
+          <button class="metro-toggle" id="metroToggle">OFF</button>
         </label>
 
         <label class="ctl" id="trackPickWrap" hidden>
@@ -161,10 +150,40 @@
         </label>
       </div>
 
-      <!-- PLAYBACK view: falling notes over the keyboard -->
+      <!-- PLAYBACK view: vertical song rail | roll+keys | vertical metronome rail -->
       <div class="playback" id="playbackView">
-        <canvas id="rollCanvas" class="roll-canvas"></canvas>
-        <img id="pianoImg" class="piano-img" src="{{ url_for('static', filename='pianotify.png') }}" alt="keyboard">
+        <div class="rail-col rail-song">
+          <span class="rail-title">SONG</span>
+          <div class="vslider">
+            <input type="range" class="vrange" id="bpm" min="40" max="220" value="120">
+            <span class="vslider-cap">TEMPO</span>
+            <output class="vslider-val" id="bpmOut">120</output>
+          </div>
+          <div class="vslider">
+            <input type="range" class="vrange" id="songVol" min="0" max="100" value="90">
+            <span class="vslider-cap">VOL</span>
+            <output class="vslider-val" id="songVolOut">90</output>
+          </div>
+        </div>
+
+        <div class="roll-wrap">
+          <canvas id="rollCanvas" class="roll-canvas"></canvas>
+          <img id="pianoImg" class="piano-img" src="{{ url_for('static', filename='pianotify.png') }}" alt="keyboard">
+        </div>
+
+        <div class="rail-col rail-metro">
+          <span class="rail-title">METRONOME</span>
+          <div class="vslider">
+            <input type="range" class="vrange" id="metroBpm" min="40" max="220" value="120">
+            <span class="vslider-cap">TEMPO</span>
+            <output class="vslider-val" id="metroBpmOut">120</output>
+          </div>
+          <div class="vslider">
+            <input type="range" class="vrange" id="metroVol" min="0" max="100" value="60">
+            <span class="vslider-cap">VOL</span>
+            <output class="vslider-val" id="metroVolOut">60</output>
+          </div>
+        </div>
       </div>
 
       <!-- EDIT view: placeholder for the deferred multitrack editor -->
@@ -200,9 +219,10 @@
     bgUrl: "{{ url_for('static', filename='bg.jpg') }}"
   };
 </script>
-<!-- VexFlow renders the live notation (staff draws in, then notes land on it).
-     Loaded defensively: if it fails, the app falls back to the PNG. -->
-<script src="https://cdn.jsdelivr.net/npm/vexflow@4.2.2/build/cjs/vexflow.js"></script>
+<!-- OpenSheetMusicDisplay renders the MusicXML into detailed notation
+     (beams, ties, dots, measures) - the open equivalent of Soundslice's viewer.
+     Loaded defensively: if it fails, the loading staves remain. -->
+<script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay@1.9.9/build/opensheetmusicdisplay.min.js"></script>
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>
