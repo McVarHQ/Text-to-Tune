@@ -1,6 +1,9 @@
 # Text-to-Tune
 Instrumental Composition from Lyrics with LSTM-GAN
 
+
+  
+
 ## Input Lyrics from Vocals - ![Sample/Billie-Vocals.wav](Sample/Billie-Vocals.wav)
 
 ## Model Output Visualization
@@ -10,6 +13,9 @@ Instrumental Composition from Lyrics with LSTM-GAN
 
 ## Final Composition, output mixed with vocals - ![Sample/Billie-Mix.wav](Sample/Billie-Mix.wav)
 
+
+
+      
 
 ### requirements
 python 2.7 and cuda 8.0.  
