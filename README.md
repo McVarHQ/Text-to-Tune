@@ -20,6 +20,7 @@ https://github.com/user-attachments/assets/af9d5e34-6d9c-4815-bec7-d01794524bf6
 <br>
 <br>      
 <br>
+
 ### Requirements
 python 2.7 and cuda 8.0.  
 gensim  
