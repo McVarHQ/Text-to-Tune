@@ -12,9 +12,9 @@ Instrumental Composition from Lyrics with LSTM-GAN
 ## Model Output Visualization
 ![Sample/Screenshot.png](Sample/Screenshot.png)
 
-## MIDI Output, converted to wav for human ears - ![Sample/polysynth.wav](Sample/polysynth.wav)
+## MIDI Output, wav converted to mp4 for github compatability - https://github.com/user-attachments/assets/af9d5e34-6d9c-4815-bec7-d01794524bf6
 
-## Final Composition, output mixed with vocals - ![Sample/Billie-Mix.wav](Sample/Billie-Mix.wav)
+## Final Composition, output mixed with vocals - https://github.com/user-attachments/assets/43095709-e519-4dec-93d5-b6184e6b1a2d
 
 
 
