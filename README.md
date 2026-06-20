@@ -4,8 +4,7 @@ Instrumental Composition from Lyrics with LSTM-GAN
 
   
 
-## Input Lyrics from Vocals
-https://github.com/user-attachments/assets/fb3d0a17-b1f2-43c9-b783-bb09b8ebceb4
+## Input Lyrics from Vocals - https://github.com/user-attachments/assets/fb3d0a17-b1f2-43c9-b783-bb09b8ebceb4
 
 
 
