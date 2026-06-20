@@ -3,7 +3,8 @@ Instrumental Composition from Lyrics with LSTM-GAN
 
 #Input Lyrics from Vocals - ![Sample/Billie-Vocals.wav](Sample/Billie-Vocals.wav)
 
-#Model Output Visualization - ![Sample/Screenshot.png](Sample/Screenshot.png)
+#Model Output Visualization
+![Sample/Screenshot.png](Sample/Screenshot.png)
 
 #MIDI Output, converted to wav for human ears - ![Sample/polysynth.wav](Sample/polysynth.wav)
 
