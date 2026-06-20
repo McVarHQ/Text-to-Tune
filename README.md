@@ -16,9 +16,9 @@ https://github.com/user-attachments/assets/43095709-e519-4dec-93d5-b6184e6b1a2d
 ## Final Composition, output mixed with vocals - 
 https://github.com/user-attachments/assets/af9d5e34-6d9c-4815-bec7-d01794524bf6
 
+<br>
+<br>
 ---  
-<br>
-<br>
 <br>      
 <br>
 
