@@ -4,7 +4,8 @@ Instrumental Composition from Lyrics with LSTM-GAN
 
   
 
-## Input Lyrics from Vocals - ![Sample/Billie-Vocals.wav](Sample/Billie-Vocals.wav)
+## Input Lyrics from Vocals
+![Sample/Billie-Vocals.wav](Sample/Billie-Vocals.mp4)
 
 ## Model Output Visualization
 ![Sample/Screenshot.png](Sample/Screenshot.png)
