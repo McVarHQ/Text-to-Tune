@@ -76,13 +76,20 @@
         <span class="led led-amber"></span>
         <span id="stageLabel">COMPOSING</span>
         <span class="eta" id="eta"></span>
+        <button class="expand-btn" id="expandScore" title="Expand to full screen" hidden>&#10530;</button>
       </div>
       <div class="score-wrap">
         <div class="score-host" id="scoreHost">
-          <!-- loading: lightweight staff lines that "draw in" left-to-right -->
-          <div class="load-staves" id="loadStaves"></div>
-          <!-- done: detailed OSMD notation appears here -->
+          <!-- loading progress: a REAL OSMD empty staff, revealed logarithmically -->
+          <div class="load-staves" id="loadStaves">
+            <div class="load-base"></div>     <!-- faint: staff always visible -->
+            <div class="load-bright"></div>   <!-- bright: draws in L->R with progress -->
+          </div>
+          <!-- coin-trick background: OSMD's OWN staff lines (notes hidden) -->
+          <div class="osmd-bg" id="osmdBg" hidden></div>
+          <!-- foreground: full OSMD notation, revealed R->L over its own staff lines -->
           <div class="osmd-mount" id="osmdMount"></div>
+          <div class="wipe-edge" id="wipeEdge"></div>
         </div>
       </div>
     </div>
@@ -131,8 +138,11 @@
 
       <!-- transport + selectors strip -->
       <div class="deck-controls">
+        <button class="transport sm" id="restartBtn" title="Restart">&#9198;</button>
+        <button class="transport sm" id="back10Btn" title="Back 10s">&#8634;</button>
         <button class="transport" id="playBtn" title="Play / pause">&#9654;</button>
-        <button class="transport" id="stopBtn" title="Stop">&#9632;</button>
+        <button class="transport sm" id="fwd10Btn" title="Forward 10s">&#8635;</button>
+        <button class="transport sm" id="stopBtn" title="Stop">&#9632;</button>
 
         <label class="ctl">
           <span class="ctl-cap">INSTRUMENT</span>
@@ -148,6 +158,13 @@
           <span class="ctl-cap">TRACK</span>
           <select id="trackPick" class="ctl-select"><option>Melody</option></select>
         </label>
+
+        <!-- seek + time, full width -->
+        <div class="transport-bar">
+          <span class="time" id="curTime">0:00</span>
+          <input type="range" class="seek" id="seek" min="0" max="1000" value="0">
+          <span class="time" id="durTime">0:00</span>
+        </div>
       </div>
 
       <!-- PLAYBACK view: vertical song rail | roll+keys | vertical metronome rail -->
@@ -168,6 +185,7 @@
 
         <div class="roll-wrap">
           <canvas id="rollCanvas" class="roll-canvas"></canvas>
+          <span class="zoom-tip">scroll = seek &middot; ctrl+scroll = zoom</span>
           <img id="pianoImg" class="piano-img" src="{{ url_for('static', filename='pianotify.png') }}" alt="keyboard">
         </div>
 
@@ -211,6 +229,15 @@
     </div>
   </section>
 
+</div>
+
+<!-- fullscreen score modal -->
+<div class="score-modal" id="scoreModal" hidden>
+  <div class="score-modal-bar">
+    <span class="score-modal-title">FULL SCORE</span>
+    <button class="modal-close" id="closeScore" title="Close">&#10005;</button>
+  </div>
+  <div class="score-modal-body" id="scoreModalBody"></div>
 </div>
 
 <script>
