@@ -17,7 +17,7 @@ Instrumental Composition from Lyrics with LSTM-GAN
 
       
 
-### requirements
+### Requirements
 python 2.7 and cuda 8.0.  
 gensim  
 pretty_midi  
