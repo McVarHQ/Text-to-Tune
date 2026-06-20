@@ -423,23 +423,153 @@ def _write_wav(audio, wav_path):
 
 def save_musicxml(results, xml_path, tempo=120):
     try:
-        from music21 import stream, note as m21note, tempo as m21tempo, meter
+        from music21 import stream, note as m21note, tempo as m21tempo, meter, layout, instrument
     except ImportError:
         return False
-    s = stream.Stream()
-    s.append(m21tempo.MetronomeMark(number=tempo))
-    s.append(meter.TimeSignature("4/4"))
-    for res in results:
+    part = stream.Part()
+    # blank instrument so OSMD/score shows no "Instr. <hash>" label
+    instr = instrument.Instrument()
+    instr.partName = ""
+    instr.instrumentName = ""
+    part.insert(0, instr)
+    part.append(m21tempo.MetronomeMark(number=tempo))
+    part.append(meter.TimeSignature("4/4"))
+
+    for pi, res in enumerate(results):
         sample = res["sample"][: res["used_length"]]
         syl_words = res["syllable_words"]
+        # one system (row) per phrase, so it lines up with the loading staves.
+        # phrase continuity is already preserved upstream: each phrase's melody
+        # is seeded from the previous phrase's pitches (see _seed_from_pitches),
+        # so a new system is a visual break only, not a musical reset.
+        if pi > 0:
+            sl = layout.SystemLayout()
+            sl.isNew = True
+            part.append(sl)
+        phrase_beats = 0.0
         for i in range(len(sample)):
             n = m21note.Note(int(sample[i][0]))
             n.quarterLength = max(0.25, round(float(sample[i][1]) * 4) / 4.0)
+            phrase_beats += n.quarterLength
             if i < len(syl_words):
-                n.lyric = syl_words[i][0]
-            s.append(n)
-    s.write("musicxml", fp=xml_path)
+                syl, word = syl_words[i][0], syl_words[i][1]
+                _attach_syllabic_lyric(n, syl, word, i, syl_words)
+            part.append(n)
+        # pad the phrase out to a whole number of 4/4 measures with a rest, so
+        # the phrase ends on a barline and the next system break lands cleanly
+        # (this is what makes each phrase its own row for the coin-trick).
+        remainder = phrase_beats % 4.0
+        if remainder > 1e-6:
+            pad = 4.0 - remainder
+            part.append(m21note.Rest(quarterLength=pad))
+
+    score = stream.Score()
+    score.insert(0, part)
+    score.write("musicxml", fp=xml_path)
+    _add_lyric_extensions(xml_path)
     return True
+
+
+def _add_lyric_extensions(xml_path):
+    """Post-process the MusicXML so held syllables get extension lines (the long
+    underscores) and melismas over differing pitches get a slur, matching the
+    Soundslice look. A melisma = a note with a lyric followed by one or more
+    notes that have NO lyric (e.g. a tied continuation across a barline)."""
+    try:
+        import xml.etree.ElementTree as ET
+    except Exception:
+        return
+    try:
+        tree = ET.parse(xml_path)
+        root = tree.getroot()
+    except Exception:
+        return
+
+    for part in root.iter("part"):
+        # flatten notes in document order (skip rests / chord members for lyric logic)
+        notes = []
+        for measure in part.iter("measure"):
+            for note in measure.findall("note"):
+                notes.append(note)
+
+        def has_lyric_text(n):
+            ly = n.find("lyric")
+            return ly is not None and ly.find("text") is not None and (ly.find("text").text or "").strip() != ""
+        def is_rest(n):
+            return n.find("rest") is not None
+        def pitch_key(n):
+            p = n.find("pitch")
+            if p is None: return None
+            step = p.findtext("step", ""); alt = p.findtext("alter", "0"); octv = p.findtext("octave", "")
+            return (step, alt, octv)
+
+        i = 0
+        while i < len(notes):
+            n = notes[i]
+            if has_lyric_text(n) and not is_rest(n):
+                # gather the melisma run: following notes with no lyric and not rests
+                j = i + 1
+                run = []
+                while j < len(notes) and not has_lyric_text(notes[j]) and not is_rest(notes[j]):
+                    run.append(notes[j]); j += 1
+                if run:
+                    # 1) extension line: <extend/> on the starting syllable
+                    ly = n.find("lyric")
+                    if ly is not None and ly.find("extend") is None:
+                        ET.SubElement(ly, "extend")
+                    # 2) slur if any run note differs in pitch (true melisma, not just a tie)
+                    base = pitch_key(n)
+                    differing = any(pitch_key(r) is not None and pitch_key(r) != base for r in run)
+                    if differing:
+                        _add_slur(n, run[-1])
+                i = j
+            else:
+                i += 1
+
+    try:
+        tree.write(xml_path, encoding="UTF-8", xml_declaration=True)
+    except Exception:
+        pass
+
+
+def _add_slur(start_note, end_note):
+    import xml.etree.ElementTree as ET
+    def ensure_notations(note):
+        nt = note.find("notations")
+        if nt is None:
+            nt = ET.SubElement(note, "notations")
+        return nt
+    s1 = ET.SubElement(ensure_notations(start_note), "slur")
+    s1.set("type", "start"); s1.set("number", "1")
+    s2 = ET.SubElement(ensure_notations(end_note), "slur")
+    s2.set("type", "stop"); s2.set("number", "1")
+
+
+def _attach_syllabic_lyric(n, syl, word, idx, syl_words):
+    """Attach a lyric with the correct syllabic type (single/begin/middle/end)
+    so the notation engine draws inter-syllable dashes and melisma extenders."""
+    from music21 import note as m21note
+    # find this word's run of syllable indices
+    run = [k for k, (s_, w_) in enumerate(syl_words) if w_ == word]
+    # only treat as the same run if contiguous around idx
+    # determine position of idx within its contiguous word-run
+    start = idx
+    while start - 1 >= 0 and syl_words[start - 1][1] == word:
+        start -= 1
+    end = idx
+    while end + 1 < len(syl_words) and syl_words[end + 1][1] == word:
+        end += 1
+    length = end - start + 1
+    if length <= 1:
+        syllabic = "single"
+    elif idx == start:
+        syllabic = "begin"
+    elif idx == end:
+        syllabic = "end"
+    else:
+        syllabic = "middle"
+    lyr = m21note.Lyric(text=syl, syllabic=syllabic)
+    n.lyrics.append(lyr)
 
 
 def render_score_png(xml_path, png_path_prefix):
