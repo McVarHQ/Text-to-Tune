@@ -4,17 +4,17 @@ Instrumental Composition from Lyrics with LSTM-GAN
 
   
 
-## Input Lyrics from Vocals - https://github.com/user-attachments/assets/fb3d0a17-b1f2-43c9-b783-bb09b8ebceb4
-
-
-
+## Input Lyrics from Vocals - 
+https://github.com/user-attachments/assets/fb3d0a17-b1f2-43c9-b783-bb09b8ebceb4
 
 ## Model Output Visualization
 ![Sample/Screenshot.png](Sample/Screenshot.png)
 
-## MIDI Output, wav converted to mp4 for github compatability - https://github.com/user-attachments/assets/af9d5e34-6d9c-4815-bec7-d01794524bf6
+## MIDI Output, wav converted to mp4 for github compatability - 
+https://github.com/user-attachments/assets/af9d5e34-6d9c-4815-bec7-d01794524bf6
 
-## Final Composition, output mixed with vocals - https://github.com/user-attachments/assets/43095709-e519-4dec-93d5-b6184e6b1a2d
+## Final Composition, output mixed with vocals - 
+https://github.com/user-attachments/assets/43095709-e519-4dec-93d5-b6184e6b1a2d
 
 
 
