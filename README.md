@@ -12,14 +12,14 @@ Instrumental Composition from Lyrics with LSTM-GAN
 
 
 ### requirements
-python 2.7 and cuda 8.0.
-gensim
-pretty_midi
-py_midi
-tensorflow-gpu 1.14.0
-jupyter
-matplotlib
-scikit-learn
+python 2.7 and cuda 8.0.  
+gensim  
+pretty_midi  
+py_midi  
+tensorflow-gpu 1.14.0  
+jupyter  
+matplotlib  
+scikit-learn  
 
 ### Folders
  - *Data*: a folder containing the raw file-by-file dataset to be preprocessed (songs_word_level) and a folder which stores the matrix-shaped dataset after pre-processing
