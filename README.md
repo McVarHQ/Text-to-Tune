@@ -11,7 +11,7 @@ Instrumental Composition from Lyrics with LSTM-GAN
 ## Final Composition, output mixed with vocals - ![Sample/Billie-Mix.wav](Sample/Billie-Mix.wav)
 
 
-#requirements
+##requirements
 python 2.7 and cuda 8.0.
 gensim
 pretty_midi
